@@ -1,0 +1,54 @@
+def EnvPowerShell(psCmd) {
+    psCmd=psCmd.replaceAll("%", "%%")
+    bat "powershell.exe -NonInteractive -ExecutionPolicy Bypass -Command \"\$ErrorActionPreference='Stop';[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;$psCmd;EXIT \$global:LastExitCode\""
+}
+
+pipeline {
+    agent any
+	stages {
+		stage('Checkout Sources') {
+			steps {
+				checkout([$class: 'MercurialSCM', credentialsId: '8a8861fe-e400-4d27-a542-8837ebe5a156', installation: 'Mercurial-SCM', revision: 'New_Automation_Fix', source: 'https://sc.enviance.com/scm/hg/enviance_dev_hs/Enviance.Ergo.HS.Automation'])
+			}
+		}
+				
+		stage('Clean and Assemble'){
+			parallel {
+				stage('JHA Smoke') {
+					steps{
+					    EnvPowerShell(". (join-path '$WORKSPACE' 'src\\build.ps1') 'JHA_Smoke' 'TestData' 'clean assemble' ")
+					}
+				}
+				
+			}
+		}
+		
+		stage('Run Tests'){
+			parallel {
+				stage('JHA Smoke') {
+					steps{
+					    EnvPowerShell(". (join-path '$WORKSPACE' 'src\\build.ps1') 'JHA_Smoke' '' 'test' ")
+					
+					}
+					
+					post {
+						always {
+							publishHTML (target: [
+									allowMissing: false,
+									alwaysLinkToLastBuild: false,
+									keepAll: true,
+									reportDir: 'src/JHA_Smoke/build/reports/tests/test',
+									reportFiles: 'index.html',
+									reportName: "JHA_Smoke_Chrome"
+									])
+
+						}
+
+                    }
+				}
+				
+			}
+		}
+
+			}
+}
